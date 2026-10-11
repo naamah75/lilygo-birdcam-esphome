@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install pinned ESPHome
         run: |
           python3 -m venv /tmp/birdcam-ci
@@ -27,10 +27,13 @@ jobs:
         run: |
           /tmp/birdcam-ci/bin/python - <<'PY'
           from pathlib import Path
+          import base64
+          import secrets
+          key = base64.b64encode(secrets.token_bytes(32)).decode()
           Path('secrets.yaml').write_text(
               'wifi_ssid: "birdcam-ci-example"\n'
               'wifi_password: "test-only-password"\n'
-              'birdcam_api_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="\n'
+              f'birdcam_api_key: "{key}"\n'
               'birdcam_ap_password: "test-only-ap-password"\n'
           )
           PY
