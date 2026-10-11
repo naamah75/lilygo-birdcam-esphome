@@ -1,4 +1,5 @@
 #include "birdcam.h"
+#include "audio_recorder.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 #include <esp_heap_caps.h>
@@ -93,6 +94,8 @@ void Birdcam::loop() {
 }
 
 bool Birdcam::trigger(const std::string &source) {
+  // Recording and photo cooldowns are independent. No deferred event queue.
+  if (recorder_ != nullptr && source != "Manuale") recorder_->trigger(source);
   if ((source == "PIR" && !pir_enabled_) || (source == "Audio" && !audio_enabled_)) return false;
   const uint32_t now = millis();
   if (!camera_ready() || now - camera_start_ < 2000 || pending_) return false;
@@ -108,7 +111,8 @@ bool Birdcam::trigger(const std::string &source) {
 }
 
 void Birdcam::audio_level(float level) {
-  if (!audio_enabled_ || !std::isfinite(level) || level < audio_threshold_) {
+  if ((!audio_enabled_ && (recorder_ == nullptr || !recorder_->wants_audio())) ||
+      !std::isfinite(level) || level < audio_threshold_) {
     audio_above_ = false;
     return;
   }
@@ -210,6 +214,16 @@ void Birdcam::start_http_() {
   if (httpd_register_uri_handler(http_, &uri) != ESP_OK) {
     httpd_stop(http_); http_ = nullptr;
     last_error_ = "Registrazione HTTP fallita"; errors_++;
+  }
+  if (http_ != nullptr && recorder_ != nullptr && !recorder_->is_failed()) {
+    httpd_uri_t wav{};
+    wav.uri = "/last.wav";
+    wav.method = HTTP_GET;
+    wav.handler = AudioRecorder::wav_handler;
+    wav.user_ctx = recorder_;
+    if (httpd_register_uri_handler(http_, &wav) != ESP_OK) {
+      last_error_ = "Registrazione HTTP WAV fallita"; errors_++;
+    }
   }
 }
 
