@@ -1,0 +1,720 @@
+# LILYGO T-Camera S3 V1.6 (I2S). Target tested version: ESPHome 2026.9.1.
+# Copy this folder into the configuration directory used by Device Builder.
+substitutions:
+  device_name: birdcam
+  friendly_name: Birdcam
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.9.1
+  project:
+    name: local.lilygo_birdcam
+    version: "0.1.1"
+  on_boot:
+    priority: -100
+    then:
+      - lambda: id(audio_controls_ready) = true;
+      - sound_level.stop: audio_meter
+      - delay: 1s
+      - lambda: |-
+          if (id(controller).camera_ready()) {
+            id(control_mirror).publish_state(false);
+            id(control_flip).publish_state(false);
+            id(control_aec).publish_state(true);
+            id(control_agc).publish_state(true);
+          }
+
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [birdcam]
+
+logger:
+  level: INFO
+
+api:
+  encryption:
+    key: !secret birdcam_api_key
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    encryption:
+      key: !secret birdcam_api_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 0s
+  power_save_mode: NONE
+  ap:
+    ssid: Birdcam Setup
+    password: !secret birdcam_ap_password
+
+captive_portal:
+mdns:
+
+i2c:
+  - id: board_bus
+    sda: GPIO7
+    scl: GPIO6
+    frequency: 100kHz
+    scan: true
+  - id: camera_bus
+    sda: GPIO5
+    scl: GPIO4
+    frequency: 100kHz
+    scan: false
+
+birdcam:
+  id: controller
+  camera_id: live_camera
+  i2c_id: board_bus
+  address: 0x34
+  photo_port: 8082
+
+esp32_camera:
+  id: live_camera
+  name: Live
+  icon: mdi:camera
+  external_clock:
+    pin: GPIO38
+    frequency: 20MHz
+  i2c_id: camera_bus
+  data_pins: [GPIO14, GPIO47, GPIO48, GPIO21, GPIO13, GPIO11, GPIO10, GPIO9]
+  vsync_pin: GPIO8
+  href_pin: GPIO18
+  pixel_clock_pin: GPIO12
+  reset_pin: GPIO39
+  # Allocate at the maximum selectable size; controller switches to VGA after setup.
+  resolution: 1600x1200
+  jpeg_quality: 12
+  frame_buffer_count: 1
+  frame_buffer_location: PSRAM
+  max_framerate: 10 fps
+  idle_framerate: 0 fps
+  vertical_flip: false
+  horizontal_mirror: false
+
+esp32_camera_web_server:
+  - port: 8080
+    mode: stream
+  - port: 8081
+    mode: snapshot
+
+i2s_audio:
+  id: mic_bus
+  i2s_lrclk_pin: GPIO42
+  i2s_bclk_pin: GPIO40
+
+microphone:
+  - platform: i2s_audio
+    id: board_microphone
+    i2s_audio_id: mic_bus
+    adc_type: external
+    i2s_din_pin: GPIO41
+    pdm: false
+    channel: left
+    sample_rate: 16000
+    bits_per_sample: 32bit
+    correct_dc_offset: true
+
+time:
+  - platform: sntp
+    id: clock_time
+    timezone: Europe/Rome
+
+font:
+  - file: fonts/DejaVuSansMono.ttf
+    id: small_font
+    size: 10
+    glyphs: ' !"%()+,-./0123456789:;=?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz'
+
+display:
+  - platform: ssd1306_i2c
+    id: oled
+    i2c_id: board_bus
+    model: SSD1306 128x64
+    address: 0x3C
+    rotation: 180
+    update_interval: 2s
+    lambda: |-
+      it.printf(0, 0, id(small_font), "%s %s", "BIRDCAM", id(controller).usb_present() ? "USB" : "BAT");
+      it.printf(0, 11, id(small_font), "Bat %.2fV WiFi %.0f", id(controller).battery_voltage(), id(wifi_rssi).state);
+      it.printf(0, 22, id(small_font), "%s %s", id(controller).resolution().c_str(), id(controller).saving() ? "ECO" : "FULL");
+      it.printf(0, 33, id(small_font), "Foto %u %s", id(controller).photo_count(), id(controller).last_source().c_str());
+      it.printf(0, 44, id(small_font), "Audio %.0f dBFS", id(audio_rms).state);
+      if (id(clock_time).now().is_valid())
+        it.strftime(0, 54, id(small_font), "%H:%M:%S", id(clock_time).now());
+
+globals:
+  - id: audio_controls_ready
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: oled_awake
+    type: bool
+    restore_value: false
+    initial_value: 'true'
+  - id: battery_display_since
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: was_saving
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+interval:
+  - interval: 2s
+    then:
+      - lambda: |-
+          // USB always keeps display on. Battery turns it off after the selected timeout.
+          bool saving = id(controller).saving();
+          if (saving && !id(was_saving)) id(battery_display_since) = millis();
+          id(was_saving) = saving;
+          bool awake = !saving || millis() - id(battery_display_since) < uint32_t(id(display_timeout).state * 1000);
+          if (awake != id(oled_awake)) {
+            id(oled_awake) = awake;
+            if (awake) {
+              id(oled).turn_on();
+              id(oled).start_poller();
+            } else {
+              id(oled).turn_off();
+              id(oled).stop_poller();
+            }
+          }
+
+binary_sensor:
+  - platform: gpio
+    id: pir
+    name: PIR
+    icon: mdi:motion-sensor
+    device_class: motion
+    pin: GPIO17
+    filters:
+      - delayed_on: 50ms
+    on_press:
+      - lambda: id(controller).trigger("PIR");
+  - platform: status
+    name: Collegamento
+    icon: mdi:lan-connect
+  - platform: template
+    name: Alimentazione USB
+    icon: mdi:usb
+    id: usb_power
+    lambda: |-
+      if (!id(controller).power_valid()) return {};
+      return id(controller).usb_present();
+  - platform: template
+    name: Batteria presente
+    icon: mdi:battery
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(controller).power_valid()) return {};
+      return id(controller).battery_present();
+  - platform: template
+    name: Ricarica
+    icon: mdi:battery-charging
+    device_class: battery_charging
+    lambda: |-
+      if (!id(controller).power_valid()) return {};
+      return id(controller).charging();
+  - platform: template
+    name: Risparmio attivo
+    icon: mdi:leaf
+    lambda: return id(controller).saving();
+  - platform: template
+    name: Scatto in corso
+    icon: mdi:camera-timer
+    entity_category: diagnostic
+    lambda: return id(controller).pending();
+
+sensor:
+  - platform: wifi_signal
+    id: wifi_rssi
+    name: WiFi RSSI
+    icon: mdi:wifi
+    update_interval: 30s
+    entity_category: diagnostic
+  - platform: copy
+    source_id: wifi_rssi
+    name: WiFi qualita
+    icon: mdi:wifi-check
+    unit_of_measurement: '%'
+    device_class: ''
+    filters:
+      - lambda: return std::min(100.0f, std::max(0.0f, 2.0f * (x + 100.0f)));
+    entity_category: diagnostic
+  - platform: uptime
+    name: Uptime
+    icon: mdi:timer-outline
+    update_interval: 30s
+    entity_category: diagnostic
+  - platform: sound_level
+    id: audio_meter
+    microphone:
+      microphone: board_microphone
+    passive: false
+    measurement_duration: 100ms
+    rms:
+      id: audio_rms
+      name: Audio RMS
+      icon: mdi:microphone
+      unit_of_measurement: dBFS
+      device_class: ''
+      on_raw_value:
+        then:
+          - lambda: id(controller).audio_level(x);
+      filters:
+        - throttle: 2s
+    peak:
+      name: Audio picco
+      icon: mdi:waveform
+      unit_of_measurement: dBFS
+      device_class: ''
+      filters:
+        - throttle: 2s
+
+  - platform: template
+    name: Tensione batteria
+    icon: mdi:battery
+    lambda: return id(controller).battery_voltage();
+    unit_of_measurement: 'V'
+    accuracy_decimals: 3
+    update_interval: 10s
+    entity_category: diagnostic
+    device_class: voltage
+  - platform: template
+    name: Tensione USB
+    icon: mdi:usb
+    lambda: return id(controller).usb_voltage();
+    unit_of_measurement: 'V'
+    accuracy_decimals: 3
+    update_interval: 10s
+    entity_category: diagnostic
+    device_class: voltage
+  - platform: template
+    name: Tensione sistema
+    icon: mdi:flash
+    lambda: return id(controller).system_voltage();
+    unit_of_measurement: 'V'
+    accuracy_decimals: 3
+    update_interval: 10s
+    entity_category: diagnostic
+    device_class: voltage
+  - platform: template
+    name: Batteria PMU stima
+    icon: mdi:battery-medium
+    lambda: return id(controller).battery_percent();
+    unit_of_measurement: '%'
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+    device_class: battery
+  - platform: template
+    name: Heap libero
+    icon: mdi:memory
+    lambda: return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    unit_of_measurement: 'B'
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+  - platform: template
+    name: Heap minimo
+    icon: mdi:memory
+    lambda: return heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    unit_of_measurement: 'B'
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+  - platform: template
+    name: PSRAM libera
+    icon: mdi:memory
+    lambda: return heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    unit_of_measurement: 'B'
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+  - platform: template
+    name: PSRAM blocco massimo
+    icon: mdi:memory
+    lambda: return heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+    unit_of_measurement: 'B'
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+  - platform: template
+    name: Foto dalla partenza
+    icon: mdi:counter
+    lambda: return id(controller).photo_count();
+    unit_of_measurement: ''
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+  - platform: template
+    name: Errori foto
+    icon: mdi:alert-circle-outline
+    lambda: return id(controller).error_count();
+    unit_of_measurement: ''
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+  - platform: template
+    name: Dimensione ultima foto
+    icon: mdi:file-image
+    lambda: return id(controller).photo_bytes();
+    unit_of_measurement: 'B'
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+  - platform: template
+    name: Tempo acquisizione
+    icon: mdi:camera-timer
+    lambda: return id(controller).capture_ms();
+    unit_of_measurement: 'ms'
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+    device_class: duration
+  - platform: template
+    name: Eta ultima foto
+    icon: mdi:clock-outline
+    lambda: return id(controller).photo_age();
+    unit_of_measurement: 's'
+    accuracy_decimals: 0
+    update_interval: 10s
+    entity_category: diagnostic
+    device_class: duration
+
+text_sensor:
+  - platform: version
+    name: Versione ESPHome
+    icon: mdi:chip
+    entity_category: diagnostic
+  - platform: wifi_info
+    ip_address:
+      name: Indirizzo IP
+      icon: mdi:ip-network
+      id: ip_address
+    ssid:
+      name: SSID
+      icon: mdi:wifi
+    mac_address:
+      name: MAC
+      icon: mdi:network-outline
+  - platform: template
+    name: Ultimo trigger
+    icon: mdi:motion-sensor
+    lambda: return id(controller).last_source();
+    update_interval: 2s
+  - platform: template
+    name: Risoluzione effettiva
+    icon: mdi:image-size-select-large
+    lambda: return id(controller).resolution();
+    update_interval: 2s
+  - platform: template
+    name: Ultimo errore
+    icon: mdi:alert-circle-outline
+    entity_category: diagnostic
+    lambda: return id(controller).last_error();
+    update_interval: 5s
+  - platform: template
+    name: Motivo reset
+    icon: mdi:restart-alert
+    entity_category: diagnostic
+    lambda: return std::to_string(esp_reset_reason());
+    update_interval: 60s
+
+button:
+  - platform: template
+    name: Scatta foto
+    icon: mdi:camera
+    on_press:
+      - lambda: id(controller).trigger("Manuale");
+  - platform: restart
+    name: Riavvia
+    icon: mdi:restart
+    entity_category: config
+
+switch:
+  - platform: template
+    name: Trigger PIR
+    icon: mdi:motion-sensor
+    optimistic: true
+    restore_mode: ALWAYS_ON
+    turn_on_action:
+      - lambda: id(controller).set_pir_enabled(true);
+    turn_off_action:
+      - lambda: id(controller).set_pir_enabled(false);
+  - platform: template
+    name: Trigger audio
+    icon: mdi:microphone
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - lambda: id(controller).set_audio_enabled(true);
+      - if:
+          condition:
+            lambda: return id(audio_controls_ready);
+          then:
+            - sound_level.start: audio_meter
+    turn_off_action:
+      - lambda: id(controller).set_audio_enabled(false);
+      - if:
+          condition:
+            lambda: return id(audio_controls_ready);
+          then:
+            - sound_level.stop: audio_meter
+  - platform: template
+    name: Risparmio a batteria
+    icon: mdi:leaf
+    optimistic: true
+    restore_mode: ALWAYS_ON
+    turn_on_action:
+      - lambda: id(controller).set_battery_saving(true);
+    turn_off_action:
+      - lambda: id(controller).set_battery_saving(false);
+
+  - platform: template
+    name: Specchio
+    icon: mdi:flip-horizontal
+    id: control_mirror
+    optimistic: false
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - lambda: |-
+          if (id(controller).set_control("mirror", 1)) id(control_mirror).publish_state(true);
+    turn_off_action:
+      - lambda: |-
+          if (id(controller).set_control("mirror", 0)) id(control_mirror).publish_state(false);
+  - platform: template
+    name: Ribaltamento
+    icon: mdi:flip-vertical
+    id: control_flip
+    optimistic: false
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - lambda: |-
+          if (id(controller).set_control("flip", 1)) id(control_flip).publish_state(true);
+    turn_off_action:
+      - lambda: |-
+          if (id(controller).set_control("flip", 0)) id(control_flip).publish_state(false);
+  - platform: template
+    name: Esposizione automatica
+    icon: mdi:brightness-auto
+    id: control_aec
+    optimistic: false
+    restore_mode: ALWAYS_ON
+    turn_on_action:
+      - lambda: |-
+          if (id(controller).set_control("aec", 1)) id(control_aec).publish_state(true);
+    turn_off_action:
+      - lambda: |-
+          if (id(controller).set_control("aec", 0)) id(control_aec).publish_state(false);
+  - platform: template
+    name: Guadagno automatico
+    icon: mdi:camera-control
+    id: control_agc
+    optimistic: false
+    restore_mode: ALWAYS_ON
+    turn_on_action:
+      - lambda: |-
+          if (id(controller).set_control("agc", 1)) id(control_agc).publish_state(true);
+    turn_off_action:
+      - lambda: |-
+          if (id(controller).set_control("agc", 0)) id(control_agc).publish_state(false);
+
+number:
+  - platform: template
+    name: Soglia audio
+    icon: mdi:microphone-settings
+    min_value: -90
+    max_value: -1
+    step: 1
+    initial_value: -25
+    optimistic: true
+    restore_value: false
+    unit_of_measurement: dBFS
+    set_action:
+      - lambda: id(controller).set_audio_threshold(x);
+  - platform: template
+    name: Durata minima audio
+    icon: mdi:timer-outline
+    min_value: 0.1
+    max_value: 3
+    step: 0.1
+    initial_value: 0.2
+    optimistic: true
+    restore_value: false
+    unit_of_measurement: s
+    set_action:
+      - lambda: id(controller).set_audio_duration(x);
+  - platform: template
+    name: Intervallo minimo foto
+    icon: mdi:timer-outline
+    min_value: 1
+    max_value: 300
+    step: 1
+    initial_value: 5
+    optimistic: true
+    restore_value: false
+    unit_of_measurement: s
+    set_action:
+      - lambda: id(controller).set_cooldown(x);
+  - platform: template
+    id: display_timeout
+    name: Timeout display a batteria
+    icon: mdi:monitor-off
+    min_value: 5
+    max_value: 300
+    step: 5
+    initial_value: 30
+    optimistic: true
+    restore_value: false
+    unit_of_measurement: s
+  - platform: template
+    name: FPS USB
+    icon: mdi:video
+    min_value: 1
+    max_value: 20
+    step: 1
+    initial_value: 10
+    optimistic: true
+    restore_value: false
+    set_action:
+      - lambda: id(controller).set_usb_fps(x);
+  - platform: template
+    name: FPS batteria
+    icon: mdi:video
+    min_value: 1
+    max_value: 5
+    step: 1
+    initial_value: 2
+    optimistic: true
+    restore_value: false
+    set_action:
+      - lambda: id(controller).set_battery_fps(x);
+
+  - platform: template
+    name: Luminosita
+    icon: mdi:brightness-6
+    id: control_brightness
+    min_value: -2
+    max_value: 2
+    step: 1
+    initial_value: 0
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          if (id(controller).set_control("brightness", int(x))) id(control_brightness).publish_state(x);
+          else ESP_LOGW("birdcam", "Controllo brightness non applicato; riprovare dopo lo scatto");
+  - platform: template
+    name: Contrasto
+    icon: mdi:contrast
+    id: control_contrast
+    min_value: -2
+    max_value: 2
+    step: 1
+    initial_value: 0
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          if (id(controller).set_control("contrast", int(x))) id(control_contrast).publish_state(x);
+          else ESP_LOGW("birdcam", "Controllo contrast non applicato; riprovare dopo lo scatto");
+  - platform: template
+    name: Saturazione
+    icon: mdi:palette
+    id: control_saturation
+    min_value: -2
+    max_value: 2
+    step: 1
+    initial_value: 0
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          if (id(controller).set_control("saturation", int(x))) id(control_saturation).publish_state(x);
+          else ESP_LOGW("birdcam", "Controllo saturation non applicato; riprovare dopo lo scatto");
+  - platform: template
+    name: Qualita JPEG
+    icon: mdi:image
+    id: control_quality
+    min_value: 10
+    max_value: 63
+    step: 1
+    initial_value: 12
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          if (id(controller).set_control("quality", int(x))) id(control_quality).publish_state(x);
+          else ESP_LOGW("birdcam", "Controllo quality non applicato; riprovare dopo lo scatto");
+  - platform: template
+    name: Compensazione esposizione
+    icon: mdi:brightness-5
+    id: control_ae_level
+    min_value: -2
+    max_value: 2
+    step: 1
+    initial_value: 0
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          if (id(controller).set_control("ae_level", int(x))) id(control_ae_level).publish_state(x);
+          else ESP_LOGW("birdcam", "Controllo ae_level non applicato; riprovare dopo lo scatto");
+  - platform: template
+    name: Esposizione manuale
+    icon: mdi:camera-iris
+    id: control_exposure
+    min_value: 0
+    max_value: 1200
+    step: 1
+    initial_value: 300
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          if (id(controller).set_control("exposure", int(x))) id(control_exposure).publish_state(x);
+          else ESP_LOGW("birdcam", "Controllo exposure non applicato; riprovare dopo lo scatto");
+
+select:
+  - platform: template
+    name: Risoluzione
+    icon: mdi:image-size-select-large
+    id: resolution_control
+    options: [320x240, 640x480, 800x600, 1024x768, 1280x1024, 1600x1200]
+    initial_option: 640x480
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          if (id(controller).set_resolution(x)) id(resolution_control).publish_state(x);
+          else ESP_LOGW("birdcam", "Risoluzione non applicata; riprovare dopo lo scatto");
+  - platform: template
+    name: Bilanciamento bianco
+    icon: mdi:white-balance-auto
+    id: control_wb
+    options: [Auto, Sole, Nuvoloso, Ufficio, Casa]
+    initial_option: Auto
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          int value = x == "Sole" ? 1 : x == "Nuvoloso" ? 2 : x == "Ufficio" ? 3 : x == "Casa" ? 4 : 0;
+          if (id(controller).set_control("wb", value)) id(control_wb).publish_state(x);
