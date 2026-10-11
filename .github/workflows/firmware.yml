@@ -8,6 +8,7 @@ on:
       - components/**
       - fonts/**
       - .github/workflows/firmware.yml
+      - tests/**
   workflow_dispatch:
 
 permissions:
@@ -37,5 +38,7 @@ jobs:
               'birdcam_ap_password: "test-only-ap-password"\n'
           )
           PY
+      - name: Test WAV recorder logic on host
+        run: python3 tests/test_wav_host.py
       - name: Compile complete firmware
         run: /tmp/birdcam-ci/bin/python -m esphome compile birdcam.yaml
