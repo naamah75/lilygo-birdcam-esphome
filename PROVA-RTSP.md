@@ -47,6 +47,8 @@ assente nel binario 20261010 dell'utente.
 
 Per la prima prova alimenta via USB, imposta Solo USB e usa video VGA a 5 FPS.
 Controlla connessione, pacchetti in crescita e livello audio in BirdNET-Go.
+Apri poi il video e prova foto PIR. Se aumentano Errori RTSP o Blocchi audio
+persi RTSP, riduci FPS/risoluzione del video e verifica RSSI e copertura Wi-Fi.
 Imposta posizione geografica e soglia di confidenza nel server. BirdNET-Go
 ascolta continuamente: i limiti per rilevazioni ripetute vanno impostati lì.
 Il cooldown delle foto continua a funzionare sulla scheda.
@@ -66,6 +68,8 @@ circa 0,8 Mbit/s con RTP/TCP/IP, più il video.
 Guadagno del solo flusso RTSP: gain_factor: 32 nel blocco birdcam.microphone.
 Puoi regolarlo a 1–64 nel YAML e ricompilare. Il trigger foto e il sensore RMS
 mantengono il loro guadagno originale, evitando di cambiare la soglia foto.
+Audio RMS e Audio picco si aggiornano solo con Trigger audio acceso; RTSP ha
+un consumatore indipendente e non accende il misuratore fotografico.
 Campioni saturati in crescita indicano possibili distorsioni: riduci il guadagno.
 
 Se manca audio per 8 secondi, manca controllo RTSP per 65 secondi, un invio

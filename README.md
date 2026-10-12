@@ -20,6 +20,9 @@ Impostazioni e contatori non vengono ripristinati dalla flash e ripartono al ria
    ├── components/birdcam/__init__.py
    ├── components/birdcam/birdcam.h
    ├── components/birdcam/birdcam.cpp
+   ├── components/birdcam/rtsp_audio.h
+   ├── components/birdcam/rtsp_audio.cpp
+   ├── components/birdcam/rtsp_protocol.h
    └── fonts/DejaVuSansMono.ttf
    ```
 
@@ -74,7 +77,8 @@ Wi-Fi modem power save e display in standby dopo il timeout. Il display viene
 fermato anche negli aggiornamenti. Camera e microfono restano alimentati:
 questo è un risparmio moderato, non una modalità da fototrappola a lunga autonomia.
 Gli FPS sono limiti richiesti, non misure del frame rate effettivo.
-Per ridurre il consumo audio disattiva "Trigger audio": ferma l'ascolto.
+Per fermare l'acquisizione audio disattiva "Trigger audio" e imposta streaming
+RTSP Spento, oppure Solo USB quando la scheda è a batteria.
 
 Il firmware non modifica corrente di carica, tensione finale o protezione TS
 del caricatore, perché capacità e caratteristiche della batteria non sono note.
@@ -122,7 +126,7 @@ Motivo reset è il codice numerico `esp_reset_reason_t` (1 power-on, 3 software,
 - `http://IP:8082/last.jpg`: ultima foto PIR/audio/manuale, senza cache.
 - `rtsp://IP:8554/audio`: microfono mono 48 kHz, PCM L16 su TCP, un client.
 
-Gli endpoint HTTP sono locali e senza autenticazione; l'API ESPHome è cifrata.
+Gli endpoint HTTP e RTSP sono locali e senza autenticazione; l'API ESPHome è cifrata.
 Usali nella LAN e accedi da remoto attraverso HA/VPN, senza inoltrare queste porte
 su Internet. Due connessioni contemporanee massime per il server della foto.
 
