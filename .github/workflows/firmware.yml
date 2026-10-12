@@ -38,6 +38,10 @@ jobs:
               'birdcam_ap_password: "test-only-ap-password"\n'
           )
           PY
+      - name: Install RTSP decoder for interoperability test
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - name: Test RTSP server with synthetic microphone
         run: python3 tests/test_rtsp_host.py
       - name: Compile complete firmware

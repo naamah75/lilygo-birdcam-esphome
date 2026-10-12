@@ -191,7 +191,17 @@ try:
     client=Client(connect());client.play();command('usb0');time.sleep(.2);assert stats()[:3]==[0,0,0];client.s.close()
     command('mode2');time.sleep(.2);client=Client(connect());client.play();time.sleep(.1);assert stats()[:3]==[1,1,1]
     command('burst');time.sleep(.2);s=stats();assert s[2]==0 and s[3]>=1 and s[4]>=1;client.s.close()
+    # Actual FFmpeg RTSP client: the ingestion path used by BirdNET-Go 20261010.
+    time.sleep(.15)
+    assert shutil.which('ffmpeg'), 'FFmpeg required for interoperability test'
+    decoded=subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-rtsp_transport','tcp',
+        '-analyzeduration','100000','-probesize','4096','-i',f'rtsp://127.0.0.1:{port}/audio',
+        '-t','0.2','-acodec','pcm_s16le','-f','s16le','pipe:1'],capture_output=True,timeout=20)
+    assert decoded.returncode==0, decoded.stderr.decode()
+    assert len(decoded.stdout)>=4800 and len(decoded.stdout)%2==0
+    assert decoded.stdout==b'\x34\x12'*(len(decoded.stdout)//2), decoded.stdout[:32]
+    time.sleep(.15)
     client=Client(connect());client.play();command('mode0');time.sleep(.2);assert stats()[:3]==[0,0,0];client.s.close()
-    print('PASS: actual RTSP server, off default, USB policy, mic only on PLAY, TCP handshake, fragmented control, SDP, UDP rejection, session validation, RTP L16 byte order/sequence/timestamps, RTCP, keepalive, teardown, disconnect, overflow, reconnect, single client')
+    print('PASS: actual FFmpeg decoding, RTSP server, off default, USB policy, mic only on PLAY, TCP handshake, fragmented control, SDP, UDP rejection, session validation, RTP L16 byte order/sequence/timestamps, RTCP, keepalive, teardown, disconnect, overflow, reconnect, single client')
 finally:
     process.kill();process.wait()
