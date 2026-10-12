@@ -1,10 +1,9 @@
 # Birdcam — LILYGO T-Camera S3 V1.6 I²S
 
 Firmware ESPHome con trigger PIR/audio locali e ultima foto esclusivamente in PSRAM.
-Versione **0.2.0 sperimentale**: registrazione WAV mono 48 kHz/16 bit in PSRAM,
-selezionabile da HA e spenta all'avvio. Non include ancora il riconoscimento
-BirdNET o l'invio a un server. Vedi [PROVA-WAV.md](PROVA-WAV.md) per aggiornamento,
-modalità, cooldown e prova con la demo BirdNET.
+Versione **0.3.0 sperimentale**: RTSP audio direttamente sulla Birdcam, mono
+48 kHz/16 bit, spento a ogni avvio. Nessuna registrazione WAV.
+Vedi [PROVA-RTSP.md](PROVA-RTSP.md) per installazione e collegamento BirdNET-Go.
 Versione di riferimento: **ESPHome 2026.9.1**, framework **ESP-IDF**, flash 16 MB,
 PSRAM octal 8 MB. Il firmware usa la flash per il programma; non vi scrive JPEG.
 Impostazioni e contatori non vengono ripristinati dalla flash e ripartono al riavvio.
@@ -121,7 +120,7 @@ Motivo reset è il codice numerico `esp_reset_reason_t` (1 power-on, 3 software,
 - `http://IP:8080/`: live MJPEG (un client stream del server).
 - `http://IP:8081/`: snapshot corrente, differente dalla foto dell'evento.
 - `http://IP:8082/last.jpg`: ultima foto PIR/audio/manuale, senza cache.
-- `http://IP:8082/last.wav`: ultima registrazione completata, PCM mono 48 kHz/16 bit.
+- `rtsp://IP:8554/audio`: microfono mono 48 kHz, PCM L16 su TCP, un client.
 
 Gli endpoint HTTP sono locali e senza autenticazione; l'API ESPHome è cifrata.
 Usali nella LAN e accedi da remoto attraverso HA/VPN, senza inoltrare queste porte

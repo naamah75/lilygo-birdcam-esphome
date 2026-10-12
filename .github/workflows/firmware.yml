@@ -2,7 +2,7 @@ name: Compile Birdcam
 
 on:
   push:
-    branches: [main, wav-recording]
+    branches: [main, wav-recording, rtsp-audio]
     paths:
       - birdcam.yaml
       - components/**
@@ -38,7 +38,7 @@ jobs:
               'birdcam_ap_password: "test-only-ap-password"\n'
           )
           PY
-      - name: Test WAV recorder logic on host
-        run: python3 tests/test_wav_host.py
+      - name: Test RTSP server with synthetic microphone
+        run: python3 tests/test_rtsp_host.py
       - name: Compile complete firmware
         run: /tmp/birdcam-ci/bin/python -m esphome compile birdcam.yaml

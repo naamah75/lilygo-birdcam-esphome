@@ -10,7 +10,7 @@ esphome:
   min_version: 2026.9.1
   project:
     name: local.lilygo_birdcam
-    version: "0.2.0"
+    version: "0.3.0"
   on_boot:
     priority: -100
     then:
@@ -81,9 +81,11 @@ i2c:
 birdcam:
   id: controller
   camera_id: live_camera
-  recorder_id: wav_recorder
+  rtsp_id: rtsp_audio
+  rtsp_port: 8554
   microphone:
     microphone: board_microphone
+    gain_factor: 32
   i2c_id: board_bus
   address: 0x34
   photo_port: 8082
@@ -202,9 +204,19 @@ interval:
 
 binary_sensor:
   - platform: template
-    name: Registrazione WAV in corso
-    icon: mdi:record-rec
-    lambda: return id(wav_recorder).recording();
+    name: RTSP abilitato
+    icon: mdi:access-point
+    lambda: return id(rtsp_audio).enabled();
+    entity_category: diagnostic
+  - platform: template
+    name: Client RTSP connesso
+    icon: mdi:lan-connect
+    lambda: return id(rtsp_audio).connected();
+    entity_category: diagnostic
+  - platform: template
+    name: Streaming audio attivo
+    icon: mdi:microphone
+    lambda: return id(rtsp_audio).playing();
   - platform: gpio
     id: pir
     name: PIR
@@ -251,35 +263,48 @@ binary_sensor:
 
 sensor:
   - platform: template
-    name: Registrazioni WAV
+    name: Pacchetti RTP
     icon: mdi:counter
-    lambda: return id(wav_recorder).count();
+    lambda: return id(rtsp_audio).packets();
     accuracy_decimals: 0
     entity_category: diagnostic
-    update_interval: 2s
+    update_interval: 5s
   - platform: template
-    name: Errori WAV
+    name: Blocchi audio persi RTSP
+    icon: mdi:music-note-off
+    lambda: return id(rtsp_audio).dropped();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+  - platform: template
+    name: Errori RTSP
     icon: mdi:alert-circle-outline
-    lambda: return id(wav_recorder).errors();
+    lambda: return id(rtsp_audio).errors();
     accuracy_decimals: 0
     entity_category: diagnostic
-    update_interval: 2s
+    update_interval: 5s
   - platform: template
-    name: Dimensione ultimo WAV
-    icon: mdi:file-music
-    lambda: return id(wav_recorder).bytes();
+    name: Connessioni RTSP
+    icon: mdi:lan-connect
+    lambda: return id(rtsp_audio).connections();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+  - platform: template
+    name: Campioni audio saturati RTSP
+    icon: mdi:volume-high
+    lambda: return id(rtsp_audio).clipped();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+  - platform: template
+    name: Buffer audio RTSP
+    icon: mdi:memory
+    lambda: return id(rtsp_audio).buffered();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
     unit_of_measurement: B
-    accuracy_decimals: 0
-    entity_category: diagnostic
-    update_interval: 2s
-  - platform: template
-    name: Attesa prossima registrazione
-    icon: mdi:timer-sand
-    lambda: return id(wav_recorder).remaining();
-    unit_of_measurement: s
-    device_class: duration
-    accuracy_decimals: 0
-    update_interval: 2s
   - platform: wifi_signal
     id: wifi_rssi
     name: WiFi RSSI
@@ -438,16 +463,11 @@ sensor:
 
 text_sensor:
   - platform: template
-    name: Ultimo trigger WAV
-    icon: mdi:microphone
-    lambda: return id(wav_recorder).last_source();
-    update_interval: 2s
-  - platform: template
-    name: Ultimo errore WAV
-    icon: mdi:alert-circle-outline
-    lambda: return id(wav_recorder).last_error();
+    name: URL RTSP audio
+    icon: mdi:link
+    lambda: return std::string("rtsp://") + id(ip_address).state + ":8554/audio";
+    update_interval: 10s
     entity_category: diagnostic
-    update_interval: 2s
   - platform: version
     name: Versione ESPHome
     icon: mdi:chip
@@ -488,11 +508,6 @@ text_sensor:
 
 button:
   - platform: template
-    name: Registra WAV
-    icon: mdi:record-circle-outline
-    on_press:
-      - lambda: id(wav_recorder).trigger("Manuale");
-  - platform: template
     name: Scatta foto
     icon: mdi:camera
     on_press:
@@ -529,7 +544,7 @@ switch:
       - lambda: id(controller).set_audio_enabled(false);
       - if:
           condition:
-            lambda: return id(audio_controls_ready) && !id(wav_recorder).wants_audio();
+            lambda: return id(audio_controls_ready);
           then:
             - sound_level.stop: audio_meter
   - platform: template
@@ -592,30 +607,6 @@ switch:
           if (id(controller).set_control("agc", 0)) id(control_agc).publish_state(false);
 
 number:
-  - platform: template
-    name: Durata registrazione WAV
-    icon: mdi:timer-outline
-    min_value: 3
-    max_value: 10
-    step: 1
-    initial_value: 6
-    optimistic: true
-    restore_value: false
-    unit_of_measurement: s
-    set_action:
-      - lambda: id(wav_recorder).set_duration(x);
-  - platform: template
-    name: Intervallo minimo registrazioni
-    icon: mdi:timer-lock-outline
-    min_value: 15
-    max_value: 3600
-    step: 5
-    initial_value: 60
-    optimistic: true
-    restore_value: false
-    unit_of_measurement: s
-    set_action:
-      - lambda: id(wav_recorder).set_interval(x);
   - platform: template
     name: Soglia audio
     icon: mdi:microphone-settings
@@ -773,20 +764,15 @@ number:
 
 select:
   - platform: template
-    name: Modalita BirdNET WAV
+    name: Streaming audio BirdNET
     icon: mdi:bird
-    options: [Spento, Solo manuale, PIR, Audio, PIR e audio]
+    options: [Spento, Solo USB, Sempre]
     initial_option: Spento
     optimistic: true
     restore_value: false
     set_action:
       - lambda: |-
-          int mode = x == "Solo manuale" ? 4 : x == "PIR" ? 1 : x == "Audio" ? 2 : x == "PIR e audio" ? 3 : 0;
-          id(wav_recorder).set_mode(mode);
-          if (id(audio_controls_ready)) {
-            if (id(wav_recorder).wants_audio()) id(audio_meter).start();
-            else if (!id(trigger_audio).state) id(audio_meter).stop();
-          }
+          id(rtsp_audio).set_mode(x == "Sempre" ? 2 : x == "Solo USB" ? 1 : 0);
   - platform: template
     name: Risoluzione
     icon: mdi:image-size-select-large
