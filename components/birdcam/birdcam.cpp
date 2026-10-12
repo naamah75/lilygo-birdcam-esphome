@@ -108,7 +108,8 @@ bool Birdcam::trigger(const std::string &source) {
 }
 
 void Birdcam::audio_level(float level) {
-  if (!audio_enabled_ || !std::isfinite(level) || level < audio_threshold_) {
+  if (!audio_enabled_ ||
+      !std::isfinite(level) || level < audio_threshold_) {
     audio_above_ = false;
     return;
   }
@@ -195,7 +196,7 @@ void Birdcam::start_http_() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = photo_port_;
   config.ctrl_port = photo_port_ + 10000;
-  config.max_uri_handlers = 2;
+  config.max_uri_handlers = 1;
   config.max_open_sockets = 2;
   config.lru_purge_enable = true;
   config.send_wait_timeout = 3;
@@ -211,6 +212,7 @@ void Birdcam::start_http_() {
     httpd_stop(http_); http_ = nullptr;
     last_error_ = "Registrazione HTTP fallita"; errors_++;
   }
+
 }
 
 esp_err_t Birdcam::photo_handler_(httpd_req_t *req) {

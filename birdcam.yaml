@@ -10,7 +10,7 @@ esphome:
   min_version: 2026.9.1
   project:
     name: local.lilygo_birdcam
-    version: "0.1.1"
+    version: "0.3.1"
   on_boot:
     priority: -100
     then:
@@ -81,6 +81,11 @@ i2c:
 birdcam:
   id: controller
   camera_id: live_camera
+  rtsp_id: rtsp_audio
+  rtsp_port: 8554
+  microphone:
+    microphone: board_microphone
+    gain_factor: 32
   i2c_id: board_bus
   address: 0x34
   photo_port: 8082
@@ -127,7 +132,7 @@ microphone:
     i2s_din_pin: GPIO41
     pdm: false
     channel: left
-    sample_rate: 16000
+    sample_rate: 48000
     bits_per_sample: 32bit
     correct_dc_offset: true
 
@@ -198,6 +203,20 @@ interval:
           }
 
 binary_sensor:
+  - platform: template
+    name: RTSP abilitato
+    icon: mdi:access-point
+    lambda: return id(rtsp_audio).enabled();
+    entity_category: diagnostic
+  - platform: template
+    name: Client RTSP connesso
+    icon: mdi:lan-connect
+    lambda: return id(rtsp_audio).connected();
+    entity_category: diagnostic
+  - platform: template
+    name: Streaming audio attivo
+    icon: mdi:microphone
+    lambda: return id(rtsp_audio).playing();
   - platform: gpio
     id: pir
     name: PIR
@@ -243,6 +262,49 @@ binary_sensor:
     lambda: return id(controller).pending();
 
 sensor:
+  - platform: template
+    name: Pacchetti RTP
+    icon: mdi:counter
+    lambda: return id(rtsp_audio).packets();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+  - platform: template
+    name: Blocchi audio persi RTSP
+    icon: mdi:music-note-off
+    lambda: return id(rtsp_audio).dropped();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+  - platform: template
+    name: Errori RTSP
+    icon: mdi:alert-circle-outline
+    lambda: return id(rtsp_audio).errors();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+  - platform: template
+    name: Connessioni RTSP
+    icon: mdi:lan-connect
+    lambda: return id(rtsp_audio).connections();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+  - platform: template
+    name: Campioni audio saturati RTSP
+    icon: mdi:volume-high
+    lambda: return id(rtsp_audio).clipped();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+  - platform: template
+    name: Buffer audio RTSP
+    icon: mdi:memory
+    lambda: return id(rtsp_audio).buffered();
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 5s
+    unit_of_measurement: B
   - platform: wifi_signal
     id: wifi_rssi
     name: WiFi RSSI
@@ -400,6 +462,12 @@ sensor:
     device_class: duration
 
 text_sensor:
+  - platform: template
+    name: URL RTSP audio
+    icon: mdi:link
+    lambda: return std::string("rtsp://") + id(ip_address).state + ":8554/audio";
+    update_interval: 10s
+    entity_category: diagnostic
   - platform: version
     name: Versione ESPHome
     icon: mdi:chip
@@ -460,6 +528,7 @@ switch:
     turn_off_action:
       - lambda: id(controller).set_pir_enabled(false);
   - platform: template
+    id: trigger_audio
     name: Trigger audio
     icon: mdi:microphone
     optimistic: true

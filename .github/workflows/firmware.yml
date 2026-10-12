@@ -1,0 +1,48 @@
+name: Compile Birdcam
+
+on:
+  push:
+    branches: [main, wav-recording, rtsp-audio]
+    paths:
+      - birdcam.yaml
+      - components/**
+      - fonts/**
+      - .github/workflows/firmware.yml
+      - tests/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned ESPHome
+        run: |
+          python3 -m venv /tmp/birdcam-ci
+          /tmp/birdcam-ci/bin/python -m pip install esphome==2026.9.1
+      - name: Create test-only secrets
+        run: |
+          /tmp/birdcam-ci/bin/python - <<'PY'
+          from pathlib import Path
+          import base64
+          import secrets
+          key = base64.b64encode(secrets.token_bytes(32)).decode()
+          Path('secrets.yaml').write_text(
+              'wifi_ssid: "birdcam-ci-example"\n'
+              'wifi_password: "test-only-password"\n'
+              f'birdcam_api_key: "{key}"\n'
+              'birdcam_ap_password: "test-only-ap-password"\n'
+          )
+          PY
+      - name: Install RTSP decoder for interoperability test
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Test RTSP server with synthetic microphone
+        run: python3 tests/test_rtsp_host.py
+      - name: Compile complete firmware
+        run: /tmp/birdcam-ci/bin/python -m esphome compile birdcam.yaml

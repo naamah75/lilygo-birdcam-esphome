@@ -1,6 +1,10 @@
 # Birdcam — LILYGO T-Camera S3 V1.6 I²S
 
 Firmware ESPHome con trigger PIR/audio locali e ultima foto esclusivamente in PSRAM.
+Versione **0.3.1 sperimentale**: RTSP audio direttamente sulla Birdcam, mono
+48 kHz/16 bit, sempre abilitato su USB e batteria. Nessuna registrazione WAV
+né pulsante di salvataggio audio. Il trigger foto audio resta spento a ogni avvio.
+Vedi [PROVA-RTSP.md](PROVA-RTSP.md) per installazione e collegamento BirdNET-Go.
 Versione di riferimento: **ESPHome 2026.9.1**, framework **ESP-IDF**, flash 16 MB,
 PSRAM octal 8 MB. Il firmware usa la flash per il programma; non vi scrive JPEG.
 Impostazioni e contatori non vengono ripristinati dalla flash e ripartono al riavvio.
@@ -17,6 +21,9 @@ Impostazioni e contatori non vengono ripristinati dalla flash e ripartono al ria
    ├── components/birdcam/__init__.py
    ├── components/birdcam/birdcam.h
    ├── components/birdcam/birdcam.cpp
+   ├── components/birdcam/rtsp_audio.h
+   ├── components/birdcam/rtsp_audio.cpp
+   ├── components/birdcam/rtsp_protocol.h
    └── fonts/DejaVuSansMono.ttf
    ```
 
@@ -43,7 +50,7 @@ Impostazioni e contatori non vengono ripristinati dalla flash e ripartono al ria
 ## Comportamento
 
 Il trigger audio è **disattivato a ogni avvio**; attivalo dallo switch in HA.
-Il PIR è attivo di default. Tutte le 57 entità ESPHome hanno un'icona dedicata.
+Il PIR è attivo di default. Tutte le entità ESPHome hanno un'icona dedicata.
 
 - PIR o rumore persistente sopra soglia richiedono uno scatto direttamente sulla
   scheda; Home Assistant non esegue l'automazione.
@@ -71,7 +78,9 @@ Wi-Fi modem power save e display in standby dopo il timeout. Il display viene
 fermato anche negli aggiornamenti. Camera e microfono restano alimentati:
 questo è un risparmio moderato, non una modalità da fototrappola a lunga autonomia.
 Gli FPS sono limiti richiesti, non misure del frame rate effettivo.
-Per ridurre il consumo audio disattiva "Trigger audio": ferma l'ascolto.
+RTSP resta disponibile anche a batteria e con "Trigger audio" spento.
+Il client BirdNET-Go avvia l'acquisizione RTSP con PLAY; alla disconnessione
+si ferma il solo consumatore RTSP. Il consumo va misurato con lo streaming attivo.
 
 Il firmware non modifica corrente di carica, tensione finale o protezione TS
 del caricatore, perché capacità e caratteristiche della batteria non sono note.
@@ -117,8 +126,9 @@ Motivo reset è il codice numerico `esp_reset_reason_t` (1 power-on, 3 software,
 - `http://IP:8080/`: live MJPEG (un client stream del server).
 - `http://IP:8081/`: snapshot corrente, differente dalla foto dell'evento.
 - `http://IP:8082/last.jpg`: ultima foto PIR/audio/manuale, senza cache.
+- `rtsp://IP:8554/audio`: microfono mono 48 kHz, PCM L16 su TCP, un client.
 
-Gli endpoint HTTP sono locali e senza autenticazione; l'API ESPHome è cifrata.
+Gli endpoint HTTP e RTSP sono locali e senza autenticazione; l'API ESPHome è cifrata.
 Usali nella LAN e accedi da remoto attraverso HA/VPN, senza inoltrare queste porte
 su Internet. Due connessioni contemporanee massime per il server della foto.
 

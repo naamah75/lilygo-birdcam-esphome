@@ -70,7 +70,7 @@ class Birdcam : public Component, public i2c::I2CDevice, public camera::CameraLi
   httpd_handle_t http_{nullptr};
   uint16_t photo_port_{8082};
   bool camera_started_{false}, power_valid_{false}, usb_{false}, battery_{false}, charging_{false};
-  bool battery_saving_{true}, audio_enabled_{true}, pir_enabled_{true}, pending_{false};
+  bool battery_saving_{true}, audio_enabled_{false}, pir_enabled_{true}, pending_{false};
   bool audio_above_{false}, have_event_{false};
   uint8_t discard_frames_{0};
   uint32_t power_poll_{0}, capture_start_{0}, last_event_{0}, last_photo_{0}, audio_since_{0};
