@@ -1,4 +1,4 @@
-# Prova RTSP audio — 0.3.0 sperimentale
+# Prova RTSP audio — 0.3.1 sperimentale
 
 Il server RTSP è sulla Birdcam. Non occorrono MediaMTX, proxy o nuovi servizi
 Linux. Il flusso contiene esclusivamente audio PCM L16 mono, 48 kHz, 16 bit.
@@ -18,9 +18,8 @@ Video e ultima foto continuano a usare gli indirizzi HTTP esistenti.
 
 ## Home Assistant
 
-**Streaming audio BirdNET**: Spento a ogni avvio, Solo USB, Sempre.
-Solo USB richiede alimentazione USB rilevata dalla PMU; con lettura non valida
-lo streaming è disabilitato. Sempre abilita anche su batteria.
+RTSP è sempre abilitato all'avvio, su USB e batteria. Il selettore
+"Streaming audio BirdNET" è stato rimosso; non occorre attivarlo in HA.
 Il microfono RTSP parte su PLAY e si ferma alla disconnessione, salvo l'altro
 consumatore indipendente, Trigger audio per le foto. Quest'ultimo resta spento
 all'avvio; accenderlo avvia il proprio misuratore RMS senza abilitare RTSP.
@@ -45,7 +44,7 @@ media, scegli solo audio. Il server Birdcam rifiuta UDP con codice RTSP 461.
 Non usare last.wav come sorgente: è stato rimosso. Non eseguire il comando file,
 assente nel binario 20261010 dell'utente.
 
-Per la prima prova alimenta via USB, imposta Solo USB e usa video VGA a 5 FPS.
+Per la prima prova alimenta via USB e usa video VGA a 5 FPS.
 Controlla connessione, pacchetti in crescita e livello audio in BirdNET-Go.
 Apri poi il video e prova foto PIR. Se aumentano Errori RTSP o Blocchi audio
 persi RTSP, riduci FPS/risoluzione del video e verifica RSSI e copertura Wi-Fi.
@@ -75,8 +74,8 @@ Campioni saturati in crescita indicano possibili distorsioni: riduci il guadagno
 Se manca audio per 8 secondi, manca controllo RTSP per 65 secondi, un invio
 resta bloccato per 300 ms o il buffer perde un blocco, la sessione viene chiusa.
 BirdNET-Go deve riconnettersi; il firmware non riproduce vecchio audio per
-recuperare una rete troppo lenta. Spegnere il selettore o rimuovere USB in Solo
-USB interrompe la sessione. Reinserire USB riabilita il server per la riconnessione.
+recuperare una rete troppo lenta. Rimuovere USB non disabilita RTSP:
+il server resta disponibile a batteria per la riconnessione.
 
 RTSP è locale e senza autenticazione, come gli endpoint HTTP già presenti;
 non inoltrare la porta su Internet. L'API HA resta cifrata.
@@ -84,6 +83,6 @@ non inoltrare la porta su Internet. L'API HA resta cifrata.
 ## Prova hardware
 
 Questa versione deve essere verificata sulla scheda con BirdNET-Go 20261010:
-qualità audio, video simultaneo, foto PIR, spegnimento/riaccensione selettore,
+qualità audio, video simultaneo, foto PIR, trigger audio spento durante RTSP,
 USB/batteria, memoria stabile e riconnessione dopo perdita Wi-Fi. In particolare
 la compilazione e i test host non misurano carico CPU, consumi o perdite I2S.

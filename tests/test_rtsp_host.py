@@ -82,7 +82,8 @@ int main(int argc,char**argv){
   assert(!rtsp::channels("RTP/AVP/TCPevil",a,b));
   Birdcam controller;esphome::microphone::MicrophoneSource mic;RtspAudio rtsp;
   rtsp.set_controller(&controller);rtsp.set_microphone(&mic);rtsp.set_port(std::atoi(argv[1]));rtsp.setup();
-  assert(!rtsp.is_failed());std::atomic<int>mode{0};std::atomic<bool>burst{false};
+  assert(!rtsp.is_failed());rtsp.loop();assert(rtsp.enabled());
+  std::atomic<int>mode{2};std::atomic<bool>burst{false};
   std::thread([&](){std::string line;while(std::getline(std::cin,line)){
     if(line=="mode0")mode=0;if(line=="mode1")mode=1;if(line=="mode2")mode=2;
     if(line=="usb0")controller.usb=false;if(line=="usb1")controller.usb=true;
@@ -152,6 +153,8 @@ class Client:
         return h
 try:
     assert lines.get(timeout=3)=='READY'
+    assert stats()[:3]==[1,0,0]
+    command('mode0');time.sleep(.15)
     assert stats()[:3]==[0,0,0]
     try:socket.create_connection(('127.0.0.1',port),timeout=.2);raise AssertionError('off listener open')
     except OSError:pass
@@ -202,6 +205,6 @@ try:
     assert decoded.stdout==b'\x34\x12'*(len(decoded.stdout)//2), decoded.stdout[:32]
     time.sleep(.15)
     client=Client(connect());client.play();command('mode0');time.sleep(.2);assert stats()[:3]==[0,0,0];client.s.close()
-    print('PASS: actual FFmpeg decoding, RTSP server, off default, USB policy, mic only on PLAY, TCP handshake, fragmented control, SDP, UDP rejection, session validation, RTP L16 byte order/sequence/timestamps, RTCP, keepalive, teardown, disconnect, overflow, reconnect, single client')
+    print('PASS: actual FFmpeg decoding, RTSP server, always enabled default, explicit off and USB policy, mic only on PLAY, TCP handshake, fragmented control, SDP, UDP rejection, session validation, RTP L16 byte order/sequence/timestamps, RTCP, keepalive, teardown, disconnect, overflow, reconnect, single client')
 finally:
     process.kill();process.wait()

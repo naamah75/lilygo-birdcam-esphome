@@ -41,7 +41,7 @@ class RtspAudio : public Component {
   uint8_t *ring_{nullptr};
   size_t read_{0}, write_{0}, used_{0};
   uint16_t port_{8554};
-  int mode_{0};
+  int mode_{2};  // Always available on USB and battery, independently of photo triggers.
   bool mic_owned_{false};
   std::atomic<bool> enabled_{false}, connected_{false}, playing_{false}, broken_{false};
   std::atomic<uint32_t> packets_{0}, dropped_{0}, errors_{0}, connections_{0}, clipped_{0};

@@ -10,7 +10,7 @@ esphome:
   min_version: 2026.9.1
   project:
     name: local.lilygo_birdcam
-    version: "0.3.0"
+    version: "0.3.1"
   on_boot:
     priority: -100
     then:
@@ -763,16 +763,6 @@ number:
           else ESP_LOGW("birdcam", "Controllo exposure non applicato; riprovare dopo lo scatto");
 
 select:
-  - platform: template
-    name: Streaming audio BirdNET
-    icon: mdi:bird
-    options: [Spento, Solo USB, Sempre]
-    initial_option: Spento
-    optimistic: true
-    restore_value: false
-    set_action:
-      - lambda: |-
-          id(rtsp_audio).set_mode(x == "Sempre" ? 2 : x == "Solo USB" ? 1 : 0);
   - platform: template
     name: Risoluzione
     icon: mdi:image-size-select-large

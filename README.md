@@ -1,8 +1,9 @@
 # Birdcam — LILYGO T-Camera S3 V1.6 I²S
 
 Firmware ESPHome con trigger PIR/audio locali e ultima foto esclusivamente in PSRAM.
-Versione **0.3.0 sperimentale**: RTSP audio direttamente sulla Birdcam, mono
-48 kHz/16 bit, spento a ogni avvio. Nessuna registrazione WAV.
+Versione **0.3.1 sperimentale**: RTSP audio direttamente sulla Birdcam, mono
+48 kHz/16 bit, sempre abilitato su USB e batteria. Nessuna registrazione WAV
+né pulsante di salvataggio audio. Il trigger foto audio resta spento a ogni avvio.
 Vedi [PROVA-RTSP.md](PROVA-RTSP.md) per installazione e collegamento BirdNET-Go.
 Versione di riferimento: **ESPHome 2026.9.1**, framework **ESP-IDF**, flash 16 MB,
 PSRAM octal 8 MB. Il firmware usa la flash per il programma; non vi scrive JPEG.
@@ -77,8 +78,9 @@ Wi-Fi modem power save e display in standby dopo il timeout. Il display viene
 fermato anche negli aggiornamenti. Camera e microfono restano alimentati:
 questo è un risparmio moderato, non una modalità da fototrappola a lunga autonomia.
 Gli FPS sono limiti richiesti, non misure del frame rate effettivo.
-Per fermare l'acquisizione audio disattiva "Trigger audio" e imposta streaming
-RTSP Spento, oppure Solo USB quando la scheda è a batteria.
+RTSP resta disponibile anche a batteria e con "Trigger audio" spento.
+Il client BirdNET-Go avvia l'acquisizione RTSP con PLAY; alla disconnessione
+si ferma il solo consumatore RTSP. Il consumo va misurato con lo streaming attivo.
 
 Il firmware non modifica corrente di carica, tensione finale o protezione TS
 del caricatore, perché capacità e caratteristiche della batteria non sono note.

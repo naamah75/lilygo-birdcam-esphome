@@ -1,5 +1,17 @@
 # Verifica 0.3.0 RTSP audio
 
+## Aggiornamento 0.3.1
+
+L'utente conferma il funzionamento della scheda e audio utile ma basso nella
+versione precedente; il server BirdNET-Go è installato. Resta da flashare
+la nuova versione e verificare il collegamento RTSP end-to-end.
+RTSP ora è abilitato automaticamente su USB e batteria; rimosso il selettore
+di spegnimento. Il trigger snapshot audio conserva ALWAYS_OFF. La registrazione
+WAV e il relativo pulsante erano già rimossi nella 0.3.0.
+Controllo locale: diff senza errori di whitespace e verifica della configurazione
+e dell'assenza dei sorgenti del registratore. La compilazione e il test RTSP
+Linux della 0.3.1 devono essere rieseguiti in CI; i risultati sotto riguardano 0.3.0.
+
 Target: LILYGO T-Camera S3 V1.6 I2S, ESPHome 2026.9.1 / ESP-IDF 5.5.5.
 
 ## Completato
